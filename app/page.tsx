@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -96,9 +95,7 @@ export default function Home() {
           <div>
             <p className="eyebrow">EXPLORE THE EDITION</p>
             <h2>Newspaper Pages</h2>
-            <p className="muted">
-              Select any page to read it in detail.
-            </p>
+            <p className="muted">Select any page to read it in detail.</p>
           </div>
           <span className="page-count">{pages.length} Pages</span>
         </div>
@@ -128,17 +125,12 @@ export default function Home() {
 
       <footer id="about">
         <div className="footer-brand">প্রতিদিন · DIGITAL EPAPER</div>
-        <p>
-          A simple digital newspaper reading experience.
-        </p>
+        <p>A simple digital newspaper reading experience.</p>
         <small>Demo project · Built with Next.js</small>
       </footer>
 
       {selectedPage !== null && (
-        <div
-          className="modal-overlay"
-          onClick={() => setSelectedPage(null)}
-        >
+        <div className="modal-overlay" onClick={() => setSelectedPage(null)}>
           <section
             className="reader-modal"
             role="dialog"
@@ -196,15 +188,11 @@ export default function Home() {
 function NewspaperPage({ pageNumber }: { pageNumber: number }) {
   return (
     <article className="newspaper-sheet">
-      <div className="paper-date">
-        DAILY EDITION · OCTOBER 10, 2026
-      </div>
+      <div className="paper-date">DAILY EDITION · OCTOBER 11, 2026</div>
 
       <div className="paper-masthead">প্রতিদিন</div>
 
-      <div className="paper-subtitle">
-        THE DAILY NEWS · BANGLADESH
-      </div>
+      <div className="paper-subtitle">THE DAILY NEWS · BANGLADESH</div>
 
       <div className="paper-rule" />
 
@@ -248,9 +236,7 @@ function NewspaperPage({ pageNumber }: { pageNumber: number }) {
         </div>
       </div>
 
-      <div className="paper-bottom">
-        SAMPLE NEWSPAPER PAGE · {pageNumber}
-      </div>
+      <div className="paper-bottom">SAMPLE NEWSPAPER PAGE · {pageNumber}</div>
     </article>
   );
 }
