@@ -24,6 +24,7 @@ const pages = Array.from({ length: 12 }, (_, index) => ({
 
 export default function Home() {
   const [selectedPage, setSelectedPage] = useState<number | null>(null);
+  const [zoom, setZoom] = useState(1);
 
   function goToPage(direction: number) {
     if (selectedPage === null) return;
@@ -109,7 +110,12 @@ export default function Home() {
               aria-label={`Open page ${page.id}`}
             >
               <div className="paper-preview">
-                <NewspaperPage pageNumber={page.id} />
+                <img
+                  className="page-thumbnail"
+                  src={`/pages/page-${page.id}.jpg`}
+                  alt={`Newspaper page ${page.id}`}
+                  loading="lazy"
+                />
               </div>
               <div className="page-card-footer">
                 <span className="page-number">
@@ -145,7 +151,25 @@ export default function Home() {
                   Page {selectedPage} of {pages.length}
                 </small>
               </div>
+              <div className="zoom-controls">
+                <button
+                  onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}
+                  aria-label="Zoom out"
+                >
+                  −
+                </button>
 
+                <span>{Math.round(zoom * 100)}%</span>
+
+                <button
+                  onClick={() => setZoom((z) => Math.min(2.5, z + 0.25))}
+                  aria-label="Zoom in"
+                >
+                  +
+                </button>
+
+                <button onClick={() => setZoom(1)}>Reset</button>
+              </div>
               <button
                 className="close-button"
                 onClick={() => setSelectedPage(null)}
@@ -156,8 +180,18 @@ export default function Home() {
             </div>
 
             <div className="reader-content">
-              <div className="large-paper">
-                <NewspaperPage pageNumber={selectedPage} />
+              <div
+                className="large-paper"
+                style={{
+                  width: `${zoom * 100}%`,
+                  minWidth: `${zoom * 100}%`,
+                }}
+              >
+                <img
+                  className="reader-image"
+                  src={`/pages/page-${selectedPage}.jpg`}
+                  alt={`Newspaper page ${selectedPage}`}
+                />
               </div>
             </div>
 

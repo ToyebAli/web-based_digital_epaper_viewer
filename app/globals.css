@@ -605,3 +605,141 @@ footer small {
     padding: 12px;
   }
 }
+
+.page-thumbnail {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #f1eee4;
+}
+
+.large-paper {
+  width: 100%;
+  max-width: 650px;
+  min-height: 0;
+  margin: 0 auto;
+  overflow: auto;
+  background: white;
+}
+
+.reader-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  transform-origin: top center;
+  transition: transform 150ms ease;
+}
+
+/* Zoom toolbar */
+.zoom-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px;
+  border: 1px solid #e2e8e3;
+  border-radius: 14px;
+  background: #f6f8f5;
+  box-shadow: 0 2px 8px rgba(25, 55, 38, 0.05);
+}
+
+/* Zoom buttons */
+.zoom-controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  height: 36px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #24533d;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+/* Hover effect */
+.zoom-controls button:hover {
+  background: #176b4b;
+  color: #ffffff;
+  border-color: #176b4b;
+  box-shadow: 0 3px 8px rgba(23, 107, 75, 0.18);
+}
+
+/* Click effect */
+.zoom-controls button:active {
+  transform: scale(0.95);
+}
+
+/* Keyboard accessibility */
+.zoom-controls button:focus-visible {
+  outline: 2px solid #176b4b;
+  outline-offset: 2px;
+}
+
+/* Current zoom percentage */
+.zoom-controls span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  height: 36px;
+  padding: 0 8px;
+  border-left: 1px solid #e0e7e0;
+  border-right: 1px solid #e0e7e0;
+  color: #263d30;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Reset button */
+.zoom-controls button:last-child {
+  min-width: 54px;
+  color: #53665a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.zoom-controls button:last-child:hover {
+  background: #e3eee6;
+  color: #176b4b;
+  border-color: #d1e2d5;
+  box-shadow: none;
+}
+
+/* Mobile toolbar */
+@media (max-width: 560px) {
+  .zoom-controls {
+    gap: 3px;
+    padding: 4px;
+    border-radius: 12px;
+  }
+
+  .zoom-controls button {
+    min-width: 32px;
+    height: 33px;
+    padding: 0 7px;
+    border-radius: 8px;
+  }
+
+  .zoom-controls span {
+    min-width: 48px;
+    height: 33px;
+    padding: 0 5px;
+    font-size: 12px;
+  }
+
+  .zoom-controls button:last-child {
+    min-width: 45px;
+    font-size: 11px;
+  }
+}
