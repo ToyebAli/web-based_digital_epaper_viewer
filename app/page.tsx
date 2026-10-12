@@ -1,38 +1,76 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getNewspapers, type NewspaperData } from "../lib/api";
 
-const pages = Array.from({ length: 12 }, (_, index) => ({
-  id: index + 1,
-  title:
-    index === 0
-      ? "Today's Main News"
-      : [
-          "National News",
-          "International",
-          "Politics",
-          "Economy",
-          "Sports",
-          "Entertainment",
-          "Editorial",
-          "Business",
-          "Lifestyle",
-          "Technology",
-          "Last Page",
-        ][(index - 1) % 11],
-}));
+type PageItem = {
+  id: number;
+  page_number: number;
+  image_url: string;
+  newspaperId: number;
+  newspaperTitle: string;
+  publicationDate: string;
+};
 
 export default function Home() {
+  const [newspapers, setNewspapers] = useState<NewspaperData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState("");
   const [selectedPage, setSelectedPage] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadNewspapers() {
+      try {
+        setLoading(true);
+        setApiError("");
+
+        const data = await getNewspapers();
+
+        if (!cancelled) {
+          setNewspapers(data);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setApiError(
+            error instanceof Error
+              ? error.message
+              : "Failed to load newspapers.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadNewspapers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const allPages: PageItem[] = newspapers.flatMap((newspaper) =>
+    newspaper.pages.map((page) => ({
+      ...page,
+      newspaperId: newspaper.id,
+      newspaperTitle: newspaper.title,
+      publicationDate: newspaper.publication_date,
+    })),
+  );
 
   function goToPage(direction: number) {
     if (selectedPage === null) return;
 
     const next = selectedPage + direction;
 
-    if (next >= 1 && next <= pages.length) {
+    if (next >= 0 && next < allPages.length) {
       setSelectedPage(next);
+      setZoom(1);
     }
   }
 
@@ -40,19 +78,58 @@ export default function Home() {
     function handleKeyDown(event: KeyboardEvent) {
       if (selectedPage === null) return;
 
-      if (event.key === "ArrowRight") goToPage(1);
-      if (event.key === "ArrowLeft") goToPage(-1);
-      if (event.key === "Escape") setSelectedPage(null);
+      if (event.key === "ArrowRight") {
+        setSelectedPage((current) =>
+          current !== null && current < allPages.length - 1
+            ? current + 1
+            : current,
+        );
+      }
+
+      if (event.key === "ArrowLeft") {
+        setSelectedPage((current) =>
+          current !== null && current > 0 ? current - 1 : current,
+        );
+      }
+
+      if (event.key === "Escape") {
+        setSelectedPage(null);
+      }
     }
 
     window.addEventListener("keydown", handleKeyDown);
+
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedPage]);
+  }, [selectedPage, allPages.length]);
+
+  if (loading) {
+    return (
+      <main>
+        <p>Loading newspapers...</p>
+      </main>
+    );
+  }
+
+  if (apiError) {
+    return (
+      <main>
+        <h2>Could not load newspapers</h2>
+        <p>{apiError}</p>
+        <button onClick={() => window.location.reload()}>Try Again</button>
+      </main>
+    );
+  }
+
+  const activePage = selectedPage !== null ? allPages[selectedPage] : null;
+
+  const currentNewspaper = activePage
+    ? newspapers.find((item) => item.id === activePage.newspaperId)
+    : null;
 
   return (
     <main>
       <header className="topbar">
-        <a className="brand" href="#">
+        <a className="brand" href="#home">
           <span className="brand-icon">প</span>
           <span>
             <strong>প্রতিদিন</strong>
@@ -98,59 +175,71 @@ export default function Home() {
             <h2>Newspaper Pages</h2>
             <p className="muted">Select any page to read it in detail.</p>
           </div>
-          <span className="page-count">{pages.length} Pages</span>
+
+          <span className="page-count">{allPages.length} Pages</span>
         </div>
 
-        <div className="page-grid">
-          {pages.map((page) => (
-            <button
-              className="page-card"
-              key={page.id}
-              onClick={() => setSelectedPage(page.id)}
-              aria-label={`Open page ${page.id}`}
-            >
-              <div className="paper-preview">
-                <img
-                  className="page-thumbnail"
-                  src={`/pages/page-${page.id}.jpg`}
-                  alt={`Newspaper page ${page.id}`}
-                  loading="lazy"
-                />
-              </div>
-              <div className="page-card-footer">
-                <span className="page-number">
-                  Page {String(page.id).padStart(2, "0")}
-                </span>
-                <span className="open-icon">↗</span>
-              </div>
-              <span className="page-title">{page.title}</span>
-            </button>
-          ))}
-        </div>
+        {allPages.length === 0 ? (
+          <p>No newspaper pages available yet.</p>
+        ) : (
+          <div className="page-grid">
+            {allPages.map((page, index) => (
+              <button
+                className="page-card"
+                key={`${page.newspaperId}-${page.id}`}
+                onClick={() => {
+                  setSelectedPage(index);
+                  setZoom(1);
+                }}
+                aria-label={`Open ${page.newspaperTitle}, page ${page.page_number}`}
+              >
+                <div className="paper-preview">
+                  <img
+                    className="page-thumbnail"
+                    src={page.image_url}
+                    alt={`${page.newspaperTitle} - Page ${page.page_number}`}
+                    loading="lazy"
+                  />
+                </div>
+
+                <div className="page-card-footer">
+                  <span className="page-number">
+                    Page {String(page.page_number).padStart(2, "0")}
+                  </span>
+                  <span className="open-icon">↗</span>
+                </div>
+
+                <span className="page-title">{page.newspaperTitle}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
       <footer id="about">
         <div className="footer-brand">প্রতিদিন · DIGITAL EPAPER</div>
         <p>A simple digital newspaper reading experience.</p>
-        <small>Demo project · Built with Next.js</small>
+        <small>Built with Next.js and Django</small>
       </footer>
 
-      {selectedPage !== null && (
+      {selectedPage !== null && activePage && (
         <div className="modal-overlay" onClick={() => setSelectedPage(null)}>
           <section
             className="reader-modal"
             role="dialog"
             aria-modal="true"
-            aria-label={`Newspaper page ${selectedPage}`}
+            aria-label={`Newspaper page ${activePage.page_number}`}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="reader-toolbar">
               <div>
-                <strong>Digital Reader</strong>
+                <strong>{activePage.newspaperTitle}</strong>
                 <small>
-                  Page {selectedPage} of {pages.length}
+                  Page {activePage.page_number} of{" "}
+                  {currentNewspaper?.pages.length ?? allPages.length}
                 </small>
               </div>
+
               <div className="zoom-controls">
                 <button
                   onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}
@@ -170,6 +259,7 @@ export default function Home() {
 
                 <button onClick={() => setZoom(1)}>Reset</button>
               </div>
+
               <button
                 className="close-button"
                 onClick={() => setSelectedPage(null)}
@@ -189,8 +279,8 @@ export default function Home() {
               >
                 <img
                   className="reader-image"
-                  src={`/pages/page-${selectedPage}.jpg`}
-                  alt={`Newspaper page ${selectedPage}`}
+                  src={activePage.image_url}
+                  alt={`${activePage.newspaperTitle} - Page ${activePage.page_number}`}
                 />
               </div>
             </div>
@@ -198,16 +288,18 @@ export default function Home() {
             <div className="reader-navigation">
               <button
                 onClick={() => goToPage(-1)}
-                disabled={selectedPage === 1}
+                disabled={selectedPage === 0}
               >
                 ← Previous
               </button>
+
               <span>
-                {selectedPage} / {pages.length}
+                {selectedPage + 1} / {allPages.length}
               </span>
+
               <button
                 onClick={() => goToPage(1)}
-                disabled={selectedPage === pages.length}
+                disabled={selectedPage === allPages.length - 1}
               >
                 Next →
               </button>
@@ -217,78 +309,4 @@ export default function Home() {
       )}
     </main>
   );
-}
-
-function NewspaperPage({ pageNumber }: { pageNumber: number }) {
-  return (
-    <article className="newspaper-sheet">
-      <div className="paper-date">DAILY EDITION · OCTOBER 11, 2026</div>
-
-      <div className="paper-masthead">প্রতিদিন</div>
-
-      <div className="paper-subtitle">THE DAILY NEWS · BANGLADESH</div>
-
-      <div className="paper-rule" />
-
-      <div className="paper-category">
-        {pageNumber === 1 ? "TODAY'S TOP STORY" : `NEWS SECTION ${pageNumber}`}
-      </div>
-
-      <h3 className="paper-headline">
-        {pageNumber === 1
-          ? "Today's Biggest Stories From Bangladesh"
-          : pagesHeadline(pageNumber)}
-      </h3>
-
-      <div className="paper-columns">
-        <div className="paper-column">
-          <div className="fake-photo">
-            <span>PHOTO {pageNumber}</span>
-          </div>
-          <p className="fake-line long" />
-          <p className="fake-line" />
-          <p className="fake-line long" />
-          <p className="fake-line medium" />
-          <p className="fake-line long" />
-          <p className="fake-line short" />
-          <p className="fake-line long" />
-          <p className="fake-line medium" />
-        </div>
-
-        <div className="paper-column">
-          <h4>Latest Updates</h4>
-          {Array.from({ length: 12 }, (_, index) => (
-            <p className="fake-line" key={index} />
-          ))}
-        </div>
-
-        <div className="paper-column">
-          <h4>In Focus</h4>
-          {Array.from({ length: 10 }, (_, index) => (
-            <p className="fake-line" key={index} />
-          ))}
-        </div>
-      </div>
-
-      <div className="paper-bottom">SAMPLE NEWSPAPER PAGE · {pageNumber}</div>
-    </article>
-  );
-}
-
-function pagesHeadline(page: number) {
-  const headlines = [
-    "Important Updates From Around The World",
-    "New Developments In National Politics",
-    "Business And Economic News Today",
-    "Latest Sports News And Highlights",
-    "Culture, Arts And Entertainment",
-    "Opinions And Editorial Highlights",
-    "Markets And Business Developments",
-    "Lifestyle And Health Updates",
-    "Technology And Innovation News",
-    "Today's Special Reports",
-    "More Stories From Today's Edition",
-  ];
-
-  return headlines[(page - 2 + headlines.length) % headlines.length];
 }
