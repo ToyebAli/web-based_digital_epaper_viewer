@@ -6,6 +6,17 @@ export type NewspaperPageData = {
   id: number;
   page_number: number;
   image_url: string;
+  sections: NewspaperPageSectionData[];
+};
+
+export type NewspaperPageSectionData = {
+  id: number;
+  title: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  sort_order: number;
 };
 
 export type NewspaperData = {
@@ -17,6 +28,12 @@ export type NewspaperData = {
   pages: NewspaperPageData[];
 };
 
+type NewspaperResponse = Omit<NewspaperData, "pages"> & {
+  pages: (Omit<NewspaperPageData, "sections"> & {
+    sections?: NewspaperPageSectionData[];
+  })[];
+};
+
 export async function getNewspapers(): Promise<NewspaperData[]> {
   const response = await fetch(`${API_URL}/api/newspapers/`);
 
@@ -24,7 +41,7 @@ export async function getNewspapers(): Promise<NewspaperData[]> {
     throw new Error(`Failed to fetch newspapers: ${response.status}`);
   }
 
-  const data: NewspaperData[] = await response.json();
+  const data: NewspaperResponse[] = await response.json();
 
   return data.map((newspaper) => ({
     ...newspaper,
@@ -32,8 +49,9 @@ export async function getNewspapers(): Promise<NewspaperData[]> {
       ? new URL(newspaper.cover_image_url, API_URL).href
       : null,
     pages: newspaper.pages.map((page) => ({
-      ...page,
-      image_url: new URL(page.image_url, API_URL).href,
+        ...page,
+        image_url: new URL(page.image_url, API_URL).href,
+        sections: page.sections ?? [],
     })),
   }));
 }

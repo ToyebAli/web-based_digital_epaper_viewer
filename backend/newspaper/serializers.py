@@ -1,11 +1,29 @@
 
 from rest_framework import serializers
-from .models import Newspaper, NewspaperPage
+from .models import Newspaper, NewspaperPage, NewspaperPageRegion
+
+
+class NewspaperPageRegionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NewspaperPageRegion
+        fields = [
+            "id",
+            "title",
+            "x",
+            "y",
+            "width",
+            "height",
+            "sort_order",
+        ]
 
 
 class NewspaperPageSerializer(serializers.ModelSerializer):
     image_url = serializers.ImageField(
         source="image",
+        read_only=True,
+    )
+    sections = NewspaperPageRegionSerializer(
+        many=True,
         read_only=True,
     )
 
@@ -15,6 +33,7 @@ class NewspaperPageSerializer(serializers.ModelSerializer):
             "id",
             "page_number",
             "image_url",
+            "sections",
         ]
 
 
