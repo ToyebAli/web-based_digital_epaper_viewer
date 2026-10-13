@@ -33,12 +33,24 @@ cd backend
 python manage.py migrate
 ```
 
-To annotate a page, sign in to Django Admin, open **Newspaper pages**, select a
-page, and add one **Newspaper page region** for each article. Record the article
-title and its rectangle: `x` and `y` are the left/top edges, while `width` and
-`height` are the rectangle dimensions; all four values are percentages from 0
-to 100. The rectangle must fit inside the page. Set `sort_order` to control
-which section appears first.
+To annotate any uploaded page, sign in to Django Admin, open **Newspaper pages**,
+select the page, save it, and click **Draw article boundaries**. Drag over each
+article on the displayed page image, enter its title in the section list, and
+save. To make several rectangles open as one article, check those sections and
+click **Create new group**; this creates a fresh group without reusing or
+combining any existing group. Click **Unmerge selected** to separate sections
+again. To connect articles across pages, select the first section, create its
+group, and save. Then open another page's annotator, select its continuation
+section, choose the saved merge group from **Add selected to existing group**,
+and click **Add to existing group**, then save. Groups are displayed as
+**Group 1**, **Group 2**, and so on; each newly created group receives the next
+number, while the stored group ID remains consistent across pages.
+The reader opens each group member's exact crop, ordered by page and section,
+when any member is clicked.
+The annotator calculates normalized `x`, `y`, `width`, and `height`
+percentages from the displayed image dimensions; it works with different source
+image sizes and recalculates against the original aspect ratio. Existing
+sections can be reviewed, renamed, or removed before saving.
 
 For a source image of `700 x 1100` pixels and an article rectangle from
 `(21, 126)` to `(185, 335)`, enter:
@@ -65,7 +77,8 @@ The newspaper list API includes the annotations under each page:
       "y": 11.45,
       "width": 23.43,
       "height": 19.0,
-      "sort_order": 1
+      "sort_order": 1,
+      "merge_group": "lead-story"
     }
   ]
 }
@@ -75,12 +88,14 @@ The frontend sends each backend rectangle to a native HTML `<map>` as a
 clickable `<area shape="rect">`. Percentage coordinates are converted to
 pixel-based `coords` for the currently displayed image size, and recalculated
 when the image is resized. Hovering an area highlights its rectangle; selecting
-it crops that exact region for zoom. Coordinates must be entered for each
+it crops that exact region for zoom. Selecting a merged section displays each
+member crop separately; the modal does not include the whitespace between
+separate article boundaries. Coordinates must be entered for each
 uploaded page: the reference e-paper uses manually supplied HTML image-map
 rectangles, not automatic article detection. Migration
 `0003_seed_reference_page_sections` imports the 16 verified rectangles for the
-matching `6acbc690d4e1f.jpg` front page. Other uploaded pages need annotations
-added in Admin before their articles become clickable.
+matching `6acbc690d4e1f.jpg` front page. Other uploaded pages can use the
+Admin drawing tool to create their own coordinates.
 
 ## Learn More
 

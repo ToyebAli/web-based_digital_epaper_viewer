@@ -68,6 +68,7 @@ class NewspaperPageRegion(models.Model):
         help_text="Section height as a percentage of the page image height.",
     )
     sort_order = models.PositiveIntegerField(default=0)
+    merge_group = models.CharField(max_length=36, blank=True, default="")
 
     class Meta:
         ordering = ["sort_order", "id"]

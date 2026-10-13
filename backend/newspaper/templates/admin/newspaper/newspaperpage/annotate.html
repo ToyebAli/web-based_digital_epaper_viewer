@@ -1,0 +1,70 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'newspaper/page-region-annotator.css' %}">
+{% endblock %}
+
+{% block content %}
+  <div class="region-annotator">
+    <h1>{{ title }}</h1>
+    <p>
+      Drag across each article on the image to draw its boundary. Enter the
+      article title, then save all sections.
+    </p>
+
+    <div class="region-annotator__toolbar">
+      <a class="button" href="{{ back_url }}">Back to page</a>
+      <button class="button" id="merge-sections" type="button" disabled>
+        Create new group
+      </button>
+      <button class="button" id="unmerge-sections" type="button" disabled>
+        Unmerge selected
+      </button>
+      <label for="existing-merge-groups">Add selected to existing group:</label>
+      <select id="existing-merge-groups" aria-label="Choose an existing group">
+        <option value="">Choose a group</option>
+        {% for group in merge_groups %}
+          <option value="{{ group }}">Group {{ forloop.counter }}</option>
+        {% endfor %}
+      </select>
+      <button class="button" id="assign-merge-group" type="button" disabled>
+        Add to existing group
+      </button>
+      <button class="button default" id="save-sections" type="button">
+        Save sections
+      </button>
+    </div>
+
+    <div class="region-annotator__workspace">
+      <div class="region-annotator__image-scroll">
+        <div class="region-annotator__stage">
+          <img id="page-image" src="{{ image_url }}" alt="Newspaper page {{ page.page_number }}">
+          <canvas id="page-canvas" aria-label="Draw article boundaries on the newspaper page"></canvas>
+        </div>
+      </div>
+
+      <aside class="region-annotator__sidebar">
+        <h2>Article sections</h2>
+        <p class="help">
+          Select sections and click Create new group to create a fresh group.
+          This never reuses or combines an existing group. To connect a section
+          from another page, select it, choose the existing group, and click Add
+          to existing group. Save sections after either action.
+        </p>
+        <ol id="section-list"></ol>
+        <p id="empty-sections" class="help">
+          No sections drawn yet. Drag on the image to draw the first one.
+        </p>
+      </aside>
+    </div>
+    <p id="save-status" role="status" aria-live="polite"></p>
+  </div>
+
+  <form id="csrf-form" hidden>{% csrf_token %}</form>
+  {{ sections|json_script:"initial-sections" }}
+  {{ merge_groups|json_script:"initial-merge-groups" }}
+  {{ save_url|json_script:"save-url" }}
+  <script src="{% static 'newspaper/page-region-annotator.js' %}?v=4" defer></script>
+{% endblock %}

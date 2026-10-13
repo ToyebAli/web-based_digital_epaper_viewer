@@ -17,6 +17,7 @@ export type NewspaperPageSectionData = {
   width: number;
   height: number;
   sort_order: number;
+  merge_group?: string;
 };
 
 export type NewspaperData = {

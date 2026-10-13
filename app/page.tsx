@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getNewspapers,
   type NewspaperData,
@@ -76,6 +76,7 @@ function NewspaperImageMap({
       <img
         ref={imageRef}
         className="annotated-page-image"
+        draggable={false}
         src={page.image_url}
         alt={`${page.newspaperTitle} - Page ${page.page_number}`}
         useMap={`#${mapName}`}
@@ -136,14 +137,63 @@ function NewspaperImageMap({
   );
 }
 
+type ArticleCropProps = {
+  imageUrl: string;
+  section: NewspaperPageSectionData;
+  zoom: number;
+};
+
+function ArticleCrop({ imageUrl, section, zoom }: ArticleCropProps) {
+  const [pageAspectRatio, setPageAspectRatio] = useState<number | null>(null);
+
+  return (
+    <div
+      className="section-zoom-viewport"
+      role="img"
+      aria-label={section.title}
+      style={{
+        aspectRatio: `${
+          ((pageAspectRatio ?? 7 / 11) * section.width) / section.height
+        }`,
+      }}
+    >
+      <img
+        src={imageUrl}
+        alt=""
+        draggable={false}
+        onLoad={(event) => {
+          const image = event.currentTarget;
+          if (image.naturalWidth && image.naturalHeight) {
+            setPageAspectRatio(image.naturalWidth / image.naturalHeight);
+          }
+        }}
+        style={{
+          width: `${(10000 / section.width) * zoom}%`,
+          left: `${(-section.x / section.width) * 100 * zoom}%`,
+          top: `${(-section.y / section.height) * 100 * zoom}%`,
+        }}
+      />
+    </div>
+  );
+}
+
 export default function Home() {
   const [newspapers, setNewspapers] = useState<NewspaperData[]>([]);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState("");
   const [selectedPage, setSelectedPage] = useState<number | null>(null);
   const [selectedRegion, setSelectedRegion] = useState<number | null>(null);
-  const [zoom, setZoom] = useState(1);
-  const [pageAspectRatio, setPageAspectRatio] = useState(7 / 11);
+  const [modalZoom, setModalZoom] = useState(1);
+  const [modalPan, setModalPan] = useState({ x: 0, y: 0 });
+  const modalImageRef = useRef<HTMLDivElement>(null);
+  const dragStart = useRef<{
+    pointerId: number;
+    x: number;
+    y: number;
+    panX: number;
+    panY: number;
+    moved: boolean;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -157,6 +207,9 @@ export default function Home() {
 
         if (!cancelled) {
           setNewspapers(data);
+          if (data.some((newspaper) => newspaper.pages.length > 0)) {
+            setSelectedPage(0);
+          }
         }
       } catch (error) {
         if (!cancelled) {
@@ -180,60 +233,76 @@ export default function Home() {
     };
   }, []);
 
-  const allPages: PageItem[] = newspapers.flatMap((newspaper) =>
-    newspaper.pages.map((page) => ({
-      ...page,
-      newspaperId: newspaper.id,
-      newspaperTitle: newspaper.title,
-      publicationDate: newspaper.publication_date,
-      sections: page.sections,
-    })),
+  const allPages: PageItem[] = useMemo(
+    () =>
+      newspapers.flatMap((newspaper) =>
+        newspaper.pages.map((page) => ({
+          ...page,
+          newspaperId: newspaper.id,
+          newspaperTitle: newspaper.title,
+          publicationDate: newspaper.publication_date,
+          sections: page.sections,
+        })),
+      ),
+    [newspapers],
   );
 
-  function goToPage(direction: number) {
+  const goToPage = useCallback((direction: number) => {
     if (selectedPage === null) return;
 
-    const next = selectedPage + direction;
+    const activeNewspaperId = allPages[selectedPage]?.newspaperId;
+    const editionPageIndexes = allPages.flatMap((page, index) =>
+      page.newspaperId === activeNewspaperId ? [index] : [],
+    );
+    const currentPosition = editionPageIndexes.indexOf(selectedPage);
+    const next = editionPageIndexes[currentPosition + direction];
 
-    if (next >= 0 && next < allPages.length) {
+    if (next !== undefined) {
       setSelectedPage(next);
       setSelectedRegion(null);
-      setZoom(1);
-      setPageAspectRatio(7 / 11);
+      setModalZoom(1);
+      setModalPan({ x: 0, y: 0 });
     }
-  }
+  }, [allPages, selectedPage]);
+
+  const handleModalWheel = useCallback((event: WheelEvent) => {
+    if (!(event.target instanceof Element) || !event.target.closest("img")) {
+      return;
+    }
+    event.preventDefault();
+    const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15;
+    const nextZoom = Math.min(4, Math.max(1, modalZoom * factor));
+    if (nextZoom === modalZoom) return;
+
+    if (nextZoom === 1) setModalPan({ x: 0, y: 0 });
+    setModalZoom(nextZoom);
+  }, [modalZoom]);
+
+  useEffect(() => {
+    const image = modalImageRef.current;
+    if (!image) return;
+
+    image.addEventListener("wheel", handleModalWheel, { passive: false });
+    return () => image.removeEventListener("wheel", handleModalWheel);
+  }, [handleModalWheel, selectedRegion]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (selectedPage === null) return;
 
       if (event.key === "ArrowRight") {
-        setSelectedPage((current) =>
-          current !== null && current < allPages.length - 1
-            ? current + 1
-            : current,
-        );
-        setSelectedRegion(null);
-        setZoom(1);
-        setPageAspectRatio(7 / 11);
+        goToPage(1);
       }
 
       if (event.key === "ArrowLeft") {
-        setSelectedPage((current) =>
-          current !== null && current > 0 ? current - 1 : current,
-        );
-        setSelectedRegion(null);
-        setZoom(1);
-        setPageAspectRatio(7 / 11);
+        goToPage(-1);
       }
 
       if (event.key === "Escape") {
         if (selectedRegion !== null) {
           setSelectedRegion(null);
-          setZoom(1);
-          setPageAspectRatio(7 / 11);
-        } else {
-          setSelectedPage(null);
+          setModalZoom(1);
+          setModalPan({ x: 0, y: 0 });
         }
       }
     }
@@ -241,7 +310,7 @@ export default function Home() {
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedPage, selectedRegion, allPages.length]);
+  }, [goToPage, selectedPage, selectedRegion]);
 
   if (loading) {
     return (
@@ -267,240 +336,321 @@ export default function Home() {
     ? newspapers.find((item) => item.id === activePage.newspaperId)
     : null;
 
+  const selectedSection =
+    selectedRegion !== null && activePage
+      ? activePage.sections[selectedRegion]
+      : null;
+  const selectedGroupMembers = selectedSection
+    ? selectedSection.merge_group
+      ? allPages
+          .filter((page) => page.newspaperId === activePage?.newspaperId)
+          .flatMap((page) =>
+            page.sections
+              .filter(
+                (section) =>
+                  section.merge_group === selectedSection.merge_group,
+              )
+              .map((section) => ({ page, section })),
+          )
+          .sort(
+            (left, right) =>
+              left.page.page_number - right.page.page_number ||
+              left.section.sort_order - right.section.sort_order,
+          )
+      : activePage
+        ? [{ page: activePage, section: selectedSection }]
+        : []
+    : [];
+
+  const editionPages = activePage
+    ? allPages.filter((page) => page.newspaperId === activePage.newspaperId)
+    : [];
+  const activeEditionPageIndex = activePage
+    ? editionPages.findIndex((page) => page.id === activePage.id)
+    : -1;
+  const publicationDate = currentNewspaper
+    ? new Date(`${currentNewspaper.publication_date}T12:00:00`).toLocaleDateString(
+        "bn-BD-u-ca-gregory",
+        {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        },
+      )
+    : "";
+
+  function selectEditionPage(pageId: number) {
+    const index = allPages.findIndex((page) => page.id === pageId);
+    if (index < 0) return;
+    setSelectedPage(index);
+    setSelectedRegion(null);
+    setModalZoom(1);
+    setModalPan({ x: 0, y: 0 });
+  }
+
+  function handleModalPointerDown(
+    event: React.PointerEvent<HTMLDivElement>,
+  ) {
+    if (event.button !== 0) return;
+    if (!(event.target instanceof Element) || !event.target.closest("img")) return;
+
+    dragStart.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      panX: modalPan.x,
+      panY: modalPan.y,
+      moved: false,
+    };
+  }
+
+  function handleModalPointerMove(
+    event: React.PointerEvent<HTMLDivElement>,
+  ) {
+    const drag = dragStart.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - drag.x;
+    const deltaY = event.clientY - drag.y;
+    if (!drag.moved && Math.hypot(deltaX, deltaY) < 3) return;
+
+    if (!drag.moved) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+    drag.moved = true;
+    setModalPan({ x: drag.panX + deltaX, y: drag.panY + deltaY });
+  }
+
+  function finishModalDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragStart.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragStart.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
   return (
-    <main>
-      <header className="topbar">
-        <a className="brand" href="#home">
-          <span className="brand-icon">প</span>
-          <span>
-            <strong>প্রতিদিন</strong>
-            <small>DIGITAL EPAPER</small>
+    <main className="epaper-app">
+      <header className="epaper-masthead">
+        <a
+          className="epaper-brand"
+          href="#edition"
+          aria-label={currentNewspaper?.title ?? "E-paper edition"}
+        >
+          <span className="epaper-brand-mark">প্র</span>
+          <span className="epaper-brand-copy">
+            <strong>{currentNewspaper?.title ?? "ই-পেপার"}</strong>
+            <small>ডিজিটাল সংবাদপত্র</small>
           </span>
         </a>
-
-        <nav className="nav-links">
-          <a href="#home">Home</a>
-          <a href="#pages">All Pages</a>
-          <a href="#about">About</a>
-        </nav>
-
-        <span className="live-label">● DIGITAL EDITION</span>
+        {publicationDate && (
+          <time className="epaper-date" dateTime={currentNewspaper?.publication_date}>
+            {publicationDate}
+          </time>
+        )}
       </header>
 
-      <section className="hero" id="home">
-        <div className="hero-content">
-          <p className="eyebrow">YOUR DAILY NEWS, IN ONE PLACE</p>
-          <h1>Today&apos;s Newspaper</h1>
-          <p className="hero-description">
-            Read every page. Explore every story.
-          </p>
-
-          <div className="edition-info">
-            <span>বাংলা সংবাদপত্র</span>
-            <span>•</span>
-            <span>
-              {new Date().toLocaleDateString("en-GB", {
-                day: "2-digit",
-                month: "long",
-                year: "numeric",
-              })}
-            </span>
-          </div>
-        </div>
-      </section>
-
-      <section className="page-section" id="pages">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">EXPLORE THE EDITION</p>
-            <h2>Newspaper Pages</h2>
-            <p className="muted">
-              Select a page, then choose a section to zoom in.
-            </p>
-          </div>
-
-          <span className="page-count">{allPages.length} Pages</span>
-        </div>
-
-        {allPages.length === 0 ? (
-          <p>No newspaper pages available yet.</p>
-        ) : (
-          <div className="page-grid">
-            {allPages.map((page, index) => (
-              <button
-                className="page-card"
-                key={`${page.newspaperId}-${page.id}`}
-                onClick={() => {
-                  setSelectedPage(index);
-                  setSelectedRegion(null);
-                  setZoom(1);
-                  setPageAspectRatio(7 / 11);
-                }}
-                aria-label={`Open ${page.newspaperTitle}, page ${page.page_number}`}
-              >
-                <div className="paper-preview">
-                  <img
-                    className="page-thumbnail"
-                    src={page.image_url}
-                    alt={`${page.newspaperTitle} - Page ${page.page_number}`}
-                    loading="lazy"
-                  />
-                </div>
-
-                <div className="page-card-footer">
-                  <span className="page-number">
-                    Page {String(page.page_number).padStart(2, "0")}
-                  </span>
-                  <span className="open-icon">↗</span>
-                </div>
-
-                <span className="page-title">{page.newspaperTitle}</span>
-              </button>
-            ))}
-          </div>
+      <nav className="epaper-toolbar" aria-label="Edition tools">
+        <a className="epaper-tool-link epaper-home-link" href="#edition" aria-label="Home">
+          <span aria-hidden="true">⌂</span>
+          <span className="epaper-tool-label">হোম</span>
+        </a>
+        {activePage && (
+          <a
+            className="epaper-tool-link"
+            href={activePage.image_url}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span aria-hidden="true">↓</span> ডাউনলোড
+          </a>
         )}
-      </section>
+        <div className="epaper-page-links" aria-label="Choose newspaper page">
+          {editionPages.map((page) => (
+            <button
+              className={
+                page.id === activePage?.id ? "epaper-page-link is-active" : "epaper-page-link"
+              }
+              key={page.id}
+              onClick={() => selectEditionPage(page.id)}
+              aria-current={page.id === activePage?.id ? "page" : undefined}
+            >
+              {page.page_number}
+            </button>
+          ))}
+        </div>
+        <span className="epaper-toolbar-spacer" />
+        <span className="epaper-edition-name">{currentNewspaper?.title}</span>
+        <button className="epaper-tool-link epaper-print-button" onClick={() => window.print()}>
+          <span aria-hidden="true">▣</span> প্রিন্ট
+        </button>
+      </nav>
 
-      <footer id="about">
-        <div className="footer-brand">প্রতিদিন · DIGITAL EPAPER</div>
-        <p>A simple digital newspaper reading experience.</p>
-        <small>Built with Next.js and Django</small>
-      </footer>
+      {allPages.length === 0 ? (
+        <section className="epaper-empty">
+          <h1>কোনো সংবাদপত্রের পাতা পাওয়া যায়নি</h1>
+          <p>প্রথমে Django Admin থেকে একটি সংবাদপত্র ও তার পাতা যোগ করুন।</p>
+        </section>
+      ) : activePage ? (
+        <div className="epaper-layout" id="edition">
+          <aside className="epaper-page-sidebar" aria-label="All newspaper pages">
+            <h2>সকল পাতা</h2>
+            <div className="epaper-thumbnails">
+              {editionPages.map((page) => (
+                <button
+                  className={
+                    page.id === activePage.id
+                      ? "epaper-thumbnail is-active"
+                      : "epaper-thumbnail"
+                  }
+                  key={page.id}
+                  onClick={() => selectEditionPage(page.id)}
+                  aria-label={`পৃষ্ঠা ${page.page_number}`}
+                  aria-current={page.id === activePage.id ? "page" : undefined}
+                >
+                  <span className="epaper-thumbnail-image">
+                    <img
+                      src={page.image_url}
+                      alt=""
+                      draggable={false}
+                      loading="lazy"
+                    />
+                  </span>
+                  <span className="epaper-thumbnail-caption">
+                    <span className="epaper-thumbnail-check" aria-hidden="true">
+                      {page.id === activePage.id ? "✓" : ""}
+                    </span>
+                    পৃষ্ঠা {page.page_number}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </aside>
 
-      {selectedPage !== null && activePage && (
+          <section className="epaper-reader" aria-label="Newspaper page reader">
+            <div className="epaper-reader-toolbar">
+              <span className="epaper-current-page">
+                পৃষ্ঠা {activePage.page_number} / {editionPages.length}
+              </span>
+
+              <div className="epaper-reader-nav">
+                <button
+                  onClick={() => goToPage(-1)}
+                  disabled={activeEditionPageIndex <= 0}
+                >
+                  ‹ পূর্বের পাতা
+                </button>
+                <button
+                  onClick={() => goToPage(1)}
+                  disabled={activeEditionPageIndex >= editionPages.length - 1}
+                >
+                  পরের পাতা ›
+                </button>
+              </div>
+            </div>
+
+            <div
+              className="epaper-page-stage"
+            >
+              <NewspaperImageMap
+                page={activePage}
+                onSelectSection={(index) => {
+                  setSelectedRegion(index);
+                  setModalZoom(1);
+                  setModalPan({ x: 0, y: 0 });
+                }}
+              />
+            </div>
+
+            <div className="epaper-bottom-nav">
+              <button
+                className="epaper-blue-button"
+                onClick={() => {
+                  setSelectedRegion(null);
+                  setModalZoom(1);
+                  setModalPan({ x: 0, y: 0 });
+                }}
+              >
+                ▤ <span>সকল পাতা</span>
+              </button>
+              <span className="epaper-bottom-count">
+                {activeEditionPageIndex + 1} / {editionPages.length}
+              </span>
+              <button
+                className="epaper-blue-button"
+                onClick={() => goToPage(1)}
+                disabled={activeEditionPageIndex >= editionPages.length - 1}
+              >
+                <span>পরের পাতা</span> »
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {selectedSection && (
         <div
           className="modal-overlay"
-          onClick={() => setSelectedPage(null)}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setSelectedRegion(null);
+              setModalZoom(1);
+              setModalPan({ x: 0, y: 0 });
+            }
+          }}
         >
           <section
             className="reader-modal"
             role="dialog"
             aria-modal="true"
-            aria-label={`Newspaper page ${activePage.page_number}`}
-            onClick={(event) => event.stopPropagation()}
+            aria-label={selectedSection.title}
           >
             <div className="reader-toolbar">
               <div>
-                <strong>{activePage.newspaperTitle}</strong>
+                <strong>নির্বাচিত সংবাদ</strong>
                 <small>
-                  Page {activePage.page_number} of{" "}
-                  {currentNewspaper?.pages.length ?? allPages.length}
-                  {selectedRegion !== null &&
-                    ` · ${activePage.sections[selectedRegion]?.title ?? "Section"}`}
+                  সংবাদপত্রের ছবির ওপর স্ক্রল করলে জুম হবে; ছবির বাইরে স্ক্রল
+                  করলে অংশটি ওপর-নিচে সরবে।
                 </small>
               </div>
-
-              {selectedRegion !== null && (
-                <div className="zoom-controls">
-                  <button
-                    onClick={() => {
-                      setSelectedRegion(null);
-                      setZoom(1);
-                    }}
-                  >
-                    All sections
-                  </button>
-
-                  <button
-                    onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}
-                    aria-label="Zoom out"
-                  >
-                    −
-                  </button>
-
-                  <span>{Math.round(zoom * 100)}%</span>
-
-                  <button
-                    onClick={() => setZoom((z) => Math.min(2.5, z + 0.25))}
-                    aria-label="Zoom in"
-                  >
-                    +
-                  </button>
-
-                  <button onClick={() => setZoom(1)}>Reset</button>
-                </div>
-              )}
-
               <button
                 className="close-button"
-                onClick={() => setSelectedPage(null)}
-                aria-label="Close reader"
+                aria-label="Close article"
+                onClick={() => {
+                  setSelectedRegion(null);
+                  setModalZoom(1);
+                  setModalPan({ x: 0, y: 0 });
+                }}
               >
-                ✕
+                ×
               </button>
             </div>
-
             <div className="reader-content">
-              {selectedRegion === null ? (
-                <NewspaperImageMap
-                  page={activePage}
-                  onSelectSection={(index) => {
-                    setSelectedRegion(index);
-                    setZoom(1);
-                  }}
-                />
-              ) : activePage.sections[selectedRegion] ? (
+              {selectedGroupMembers.length > 0 ? (
                 <div
-                  className="section-zoom-viewport"
-                  role="img"
-                  aria-label={activePage.sections[selectedRegion].title}
+                  ref={modalImageRef}
+                  className={`section-zoom-stack${modalZoom > 1 ? " is-zoomed" : ""}`}
+                  onPointerDown={handleModalPointerDown}
+                  onPointerMove={handleModalPointerMove}
+                  onPointerUp={finishModalDrag}
+                  onPointerCancel={finishModalDrag}
                   style={{
-                    aspectRatio: `${
-                      (pageAspectRatio *
-                        activePage.sections[selectedRegion].width) /
-                      activePage.sections[selectedRegion].height
-                    }`,
+                    transform: `translate(${modalPan.x}px, ${modalPan.y}px)`,
                   }}
                 >
-                  <img
-                    src={activePage.image_url}
-                    alt=""
-                    style={{
-                      width: `${
-                        (10000 /
-                          activePage.sections[selectedRegion].width) *
-                        zoom
-                      }%`,
-                      left: `${
-                        (-activePage.sections[selectedRegion].x /
-                          activePage.sections[selectedRegion].width) *
-                        100 *
-                        zoom
-                      }%`,
-                      top: `${
-                        (-activePage.sections[selectedRegion].y /
-                          activePage.sections[selectedRegion].height) *
-                        100 *
-                        zoom
-                      }%`,
-                    }}
-                  />
+                  {selectedGroupMembers.map(({ page, section }) => (
+                    <ArticleCrop
+                      key={`${page.id}-${section.id}`}
+                      imageUrl={page.image_url}
+                      section={section}
+                      zoom={modalZoom}
+                    />
+                  ))}
                 </div>
               ) : (
-                <p className="section-empty-note">
-                  This page section is unavailable.
-                </p>
+                <p>এই পাতার নির্বাচিত অংশটি পাওয়া যায়নি।</p>
               )}
-            </div>
-
-            <div className="reader-navigation">
-              <button
-                onClick={() => goToPage(-1)}
-                disabled={selectedPage === 0}
-              >
-                ← Previous
-              </button>
-
-              <span>
-                {selectedPage + 1} / {allPages.length}
-              </span>
-
-              <button
-                onClick={() => goToPage(1)}
-                disabled={selectedPage === allPages.length - 1}
-              >
-                Next →
-              </button>
             </div>
           </section>
         </div>

@@ -14,6 +14,7 @@ class NewspaperPageRegionSerializer(serializers.ModelSerializer):
             "width",
             "height",
             "sort_order",
+            "merge_group",
         ]
 
 
